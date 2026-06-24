@@ -4,6 +4,7 @@ from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 from astrbot.core.config.astrbot_config import AstrBotConfig
+from astrbot.core.message.components import At, Plain
 from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import AiocqhttpMessageEvent
 
 @register("astrbot_plugin_qq_group_inspection", "CarefreeSongs712", "AstrBot QQ进群问答审核插件", "1.0.0")
@@ -74,8 +75,10 @@ class MyPlugin(Star):
             t = random.choice(self.problems)
             problem = t[0]
             answer = t[1]
-            welcome = f"@{nickname} 请完成入群验证：\n{problem}\n验证机会 3 次\n时长 5 分钟\n[tip:你只需发送结果,不需要多余文字]"
-            await event.send(event.plain_result(welcome))
+
+            chain = [At(qq=uid), Plain(text=f"请完成入群验证：\n{problem}\n验证机会 3 次\n时长 5 分钟\n[tip:你只需发送结果,不需多余文字]")]
+            await event.send(event.chain_result(chain))
+
 
             self.processing = True
             self.latest_qqid = uid
@@ -118,12 +121,12 @@ class MyPlugin(Star):
             if(event.message_str.strip() == self.answer):
                 await event.send(event.plain_result(f"@{self.latest_nickname} 验证成功。"))
                 self.processing = False
-                await event.send(event.plain_result("新人进群默认禁言10分钟，请仔细阅读群公告的本群注意事项。"))
+                await event.send(event.plain_result("新人进群默认禁言5分钟，请仔细阅读群公告的本群注意事项。"))
                 try:
                     await self.bot.set_group_ban(
                         group_id=int(event.get_group_id()),
                         user_id=int(self.latest_qqid),
-                        duration=600,
+                        duration=300,
                     )
                 except Exception:
                     pass
@@ -139,7 +142,16 @@ class MyPlugin(Star):
                     )
                     self.processing = False
                 else:
-                    await event.send(event.plain_result(f"@{self.latest_nickname} 验证失败，请重新输入答案，剩余机会 {3 - self.wrong_times} 次"))
+                    await self.bot.delete_msg(message_id=int(event.message_obj.message_id))
+                    await event.send(event.plain_result(f"@{self.latest_nickname} 验证失败，请思考1分钟后，重新输入答案，剩余机会 {3 - self.wrong_times} 次"))
+                    try:
+                        await self.bot.set_group_ban(
+                            group_id=int(event.get_group_id()),
+                            user_id=int(self.latest_qqid),
+                            duration=60,
+                        )
+                    except Exception:
+                        pass
         
         
     async def get_nickname(self, event: AiocqhttpMessageEvent, user_id: int | str) -> str:
